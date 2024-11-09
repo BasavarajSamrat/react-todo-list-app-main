@@ -1,31 +1,39 @@
+
 pipeline {
     agent any
-    stages {
-        stage('Clone Repository') {
-            steps {
-                echo "Cloning repository..."
-                git url: 'https://github.com/BasavarajSamrat/react-todo-list-app-main.git', branch: 'main'
-            }
-        }
-        stage('Install Dependencies') {
-            steps {
-                echo "Installing dependencies..."
-                sh 'npm install'
-            }
-        }
-        stage('Start Application') {
-            steps {
-                echo "Starting the application..."
-                sh 'nohup npm start &'
-            }
-        }
+    environment {
+        DOCKER_HUB_CREDENTIALS = credentials('dockerhub-credentials')
+        DOCKER_IMAGE = "your-dockerhub-username/react-jenkins-docker-k8s"
     }
-    post {
-        success {
-            echo 'Application deployed successfully!'
+    stages {
+        stage('Checkout') {
+            steps {
+                git branch: 'main', url: 'https://github.com/BasavarajSamrat/react-todo-list-app-main.git' 
+            }
         }
-        failure {
-            echo 'Build failed!'
+        stage('Build') {
+            steps {
+                script {
+                    docker.build(DOCKER_IMAGE)
+                }
+            }
+        }
+        stage('Push to Docker Hub') {
+            steps {
+                script {
+                    docker.withRegistry('https://index.docker.io/v1/', 'DOCKER_HUB_CREDENTIALS') {
+                        docker.image(DOCKER_IMAGE).push("latest")
+                    }
+                }
+            }
+        }
+        stage('Deploy to Kubernetes') {
+            steps {
+                script {
+                    sh "kubectl apply -f k8s-deployment.yaml"
+                    sh "kubectl apply -f k8s-service.yaml"
+                }
+            }
         }
     }
 }
